@@ -5,17 +5,7 @@ import tensorflow.contrib.distributions as tfd
 
 
 def gausspdf(x, mean, sigma):
-    return tf.exp(-(x - mean)**2 /
-                  (2 * sigma**2)) / (tf.sqrt(2.0 * np.pi) * sigma)
-
-
-def _make_pos_def(mat):
-    mat = (mat + tf.transpose(mat, perm=[0, 1, 3, 2])) / 2.
-    e, v = tf.self_adjoint_eig(mat)
-    e = tf.where(e > 1e-14, e, 1e-14 * tf.ones_like(e))
-    mat_pos_def = tf.matmul(
-        tf.matmul(v, tf.matrix_diag(e), transpose_a=True), v)
-    return mat_pos_def
+    return -(x - mean)**2 / (2 * sigma**2)
 
 
 def _create_embedding(x, embed_size, embed_matrix=None):
@@ -216,35 +206,38 @@ def create_model(batch_size=50,
                 decoding[0], [0, 0, 0],
                 [batch_size, sequence_length - 1, n_features * n_gaussians]),
             [batch_size, sequence_length - 1, n_features, n_gaussians])
-        sigmas = tf.reshape(
+        sigmas = tf.nn.softplus(tf.reshape(
             tf.slice(decoding[0], [0, 0, n_features * n_gaussians], [
                 batch_size, sequence_length - 1,
-                n_features * n_features * n_gaussians
+                n_features * n_gaussians
             ]), [
-                batch_size, sequence_length - 1, n_features, n_features,
+                batch_size, sequence_length - 1, n_features,
                 n_gaussians
-            ])
-        weights = tf.reshape(
+            ]))
+        weights = tf.nn.softmax(tf.reshape(
             tf.slice(
                 decoding[0],
                 [0, 0, n_features * n_gaussians + n_features * n_features * n_gaussians],
                 [batch_size, sequence_length - 1, n_gaussians]),
-            [batch_size, sequence_length - 1, n_gaussians])
+            [batch_size, sequence_length - 1, n_gaussians]))
         components = []
         for gauss_i in range(n_gaussians):
             mean_i = means[:, :, :, gauss_i]
-            sigma_i = sigmas[:, :, :, :, gauss_i]
-            sigma_i = _make_pos_def(sigma_i)
+            sigma_i = sigmas[:, :, :, gauss_i]
             components.append(
-                tfd.MultivariateNormalFullCovariance(
-                    loc=mean_i, covariance_matrix=sigma_i))
+                tfd.MultivariateNormalDiag(
+                    loc=mean_i, scale_diag=sigma_i))
         gauss = tfd.Mixture(
             cat=tfd.Categorical(probs=weights), components=components)
 
     with tf.variable_scope('loss'):
         p = gauss.prob(decoder_output)
         negloglike = -tf.log(tf.maximum(p, 1e-10))
-        loss = tf.reduce_mean(tf.reduce_sum(negloglike, 1))
+        weighted_reconstruction = tf.reduce_mean(tf.expand_dims(weights, 2) * means, 3)
+        mdn_loss = tf.reduce_mean(tf.reduce_sum(negloglike, 1))
+        mse_loss = tf.losses.mean_squared_error(
+            weighted_reconstruction, decoder_output)
+        loss = mdn_loss + mse_loss
 
     return {
         'source': source,
@@ -253,5 +246,7 @@ def create_model(batch_size=50,
         'encoding': encoder_state,
         'decoding': decoding,
         'p': p,
-        'loss': loss
+        'loss': loss,
+        'mdn_loss': mdn_loss,
+        'mse_loss': mse_loss
     }

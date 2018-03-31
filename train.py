@@ -34,7 +34,7 @@ def train(data, n_epochs=1000, batch_size=100, sequence_length=240, **kwargs):
 
     current_learning_rate = 0.0001
     for epoch_i in range(n_epochs):
-        total = 0
+        total, total_mse, total_mdn = 0, 0, 0
         for it_i, (source, target) in enumerate(
                 batch_generator(
                     data,
@@ -44,16 +44,22 @@ def train(data, n_epochs=1000, batch_size=100, sequence_length=240, **kwargs):
                 current_learning_rate = max(0.0001,
                                             current_learning_rate * 0.99)
                 print(it_i)
-            loss = sess.run(
-                [net['loss'], opt],
+            mse_loss, mdn_loss, _ = sess.run(
+                [net['mse_loss'], net['mdn_loss'], opt],
                 feed_dict={
                     learning_rate: current_learning_rate,
                     net['keep_prob']: 0.8,
                     net['source']: source,
                     net['target']: target
-                })[0]
-            total = total + loss
-            print('{}: {}'.format(it_i, total / (it_i + 1)), end='\r')
+                })
+            total = total + mse_loss + mdn_loss
+            total_mdn = total_mdn + mdn_loss
+            total_mse = total_mse + mse_loss
+            print('{}: mdn: {}, mse: {}, total: {}'.format(
+                it_i,
+                total_mdn / (it_i + 1),
+                total_mse / (it_i + 1),
+                total / (it_i + 1)), end='\r')
         # End of epoch, save
         print('epoch {}: {}'.format(epoch_i, total / it_i))
         saver.save(sess, './seq2seq.ckpt', global_step=it_i)
@@ -62,18 +68,18 @@ def train(data, n_epochs=1000, batch_size=100, sequence_length=240, **kwargs):
 
 
 def run_euler():
-    data = np.load('euler.npy')
+    data = np.load('quats.npy')
     data = (data.reshape([data.shape[0], -1]) - np.mean(data)) / np.std(data)
-    batch_size = 50
+    batch_size = 32
     sequence_length = 120
-    n_features = 72
+    n_features = data.shape[-1]
     input_embed_size = 512
     target_embed_size = 512
     share_input_and_target_embedding = True
     n_neurons = 512
     n_layers = 2
-    n_gaussians = 5
-    use_attention = False
+    n_gaussians = 10
+    use_attention = True
     train(**locals())
 
 
