@@ -32,9 +32,9 @@ def train(data, n_epochs=1000, batch_size=100, sequence_length=240, **kwargs):
     sess.run(init_op)
     saver = tf.train.Saver()
 
-    current_learning_rate = 0.0001
+    current_learning_rate = 0.01
     for epoch_i in range(n_epochs):
-        total, total_mse, total_mdn = 0, 0, 0
+        total, total_mse, total_mdn = 0.0, 0.0, 0.0
         for it_i, (source, target) in enumerate(
                 batch_generator(
                     data,
@@ -43,7 +43,7 @@ def train(data, n_epochs=1000, batch_size=100, sequence_length=240, **kwargs):
             if it_i % 1000 == 0:
                 current_learning_rate = max(0.0001,
                                             current_learning_rate * 0.99)
-                print(it_i)
+                print('iteration: {}, learning rate: {}'.format(it_i, current_learning_rate))
             mse_loss, mdn_loss, _ = sess.run(
                 [net['mse_loss'], net['mdn_loss'], opt],
                 feed_dict={
@@ -52,16 +52,19 @@ def train(data, n_epochs=1000, batch_size=100, sequence_length=240, **kwargs):
                     net['source']: source,
                     net['target']: target
                 })
-            total = total + mse_loss + mdn_loss
-            total_mdn = total_mdn + mdn_loss
-            total_mse = total_mse + mse_loss
+            total += mse_loss + mdn_loss
+            total_mdn += mdn_loss
+            total_mse += mse_loss
             print('{}: mdn: {}, mse: {}, total: {}'.format(
                 it_i,
-                total_mdn / (it_i + 1),
-                total_mse / (it_i + 1),
-                total / (it_i + 1)), end='\r')
-        # End of epoch, save
-        print('epoch {}: {}'.format(epoch_i, total / it_i))
+                mdn_loss,
+                mse_loss,
+                mdn_loss + mse_loss, end='\r'))
+        print('-- epoch {}: mdn: {}, mse: {}, total: {} --'.format(
+            epoch_i,
+            total_mdn / (it_i + 1),
+            total_mse / (it_i + 1),
+            total / (it_i + 1)))
         saver.save(sess, './seq2seq.ckpt', global_step=it_i)
 
     sess.close()
