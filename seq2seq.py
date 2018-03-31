@@ -3,6 +3,15 @@ import tensorflow.contrib.rnn as rnn
 import tensorflow.contrib.distributions as tfd
 
 
+def _make_pos_def(mat):
+    mat = (mat + tf.transpose(mat, perm=[0, 1, 3, 2])) / 2.
+    e, v = tf.self_adjoint_eig(mat)
+    e = tf.where(e > 1e-14, e, 1e-14 * tf.ones_like(e))
+    mat_pos_def = tf.matmul(
+        tf.matmul(v, tf.matrix_diag(e), transpose_a=True), v)
+    return mat_pos_def
+
+
 def _create_embedding(x, embed_size, embed_matrix=None):
     batch_size, sequence_length, n_input = x.shape.as_list()
     # Creating an embedding matrix if one isn't given
@@ -191,27 +200,33 @@ def create_model(batch_size=50,
             decoding_lengths=lengths,
             n_features=n_outputs,
             scope=scope,
-            max_sequence_size=sequence_length)
+            max_sequence_size=sequence_length - 1)
 
     with tf.variable_scope('mdn'):
         means = tf.reshape(
-            tf.slice(decoding[0], [0, 0, 0],
-                     [-1, -1, n_features * n_gaussians]),
-            [-1, -1, n_features, n_gaussians])
-        sigmas = tf.maximum(
-            tf.reshape(
-                tf.slice(decoding[0], [0, 0, n_features * n_gaussians],
-                         [-1, -1, n_features * n_features * n_gaussians]),
-                [-1, -1, n_features, n_features, n_gaussians]), 1e-10)
+            tf.slice(
+                decoding[0], [0, 0, 0],
+                [batch_size, sequence_length - 1, n_features * n_gaussians]),
+            [batch_size, sequence_length - 1, n_features, n_gaussians])
+        sigmas = tf.reshape(
+            tf.slice(decoding[0], [0, 0, n_features * n_gaussians], [
+                batch_size, sequence_length - 1,
+                n_features * n_features * n_gaussians
+            ]), [
+                batch_size, sequence_length - 1, n_features, n_features,
+                n_gaussians
+            ])
         weights = tf.reshape(
             tf.slice(
                 decoding[0],
                 [0, 0, n_gaussians + n_features * n_features * n_gaussians],
-                [-1, -1, n_gaussians]), [-1, -1, n_gaussians])
+                [batch_size, sequence_length - 1, n_gaussians]),
+            [batch_size, sequence_length - 1, n_gaussians])
         components = []
         for gauss_i in range(n_gaussians):
             mean_i = means[:, :, :, gauss_i]
             sigma_i = sigmas[:, :, :, :, gauss_i]
+            sigma_i = _make_pos_def(sigma_i)
             components.append(
                 tfd.MultivariateNormalFullCovariance(
                     loc=mean_i, covariance_matrix=sigma_i))
