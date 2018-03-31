@@ -1,6 +1,12 @@
+import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.rnn as rnn
 import tensorflow.contrib.distributions as tfd
+
+
+def gausspdf(x, mean, sigma):
+    return tf.exp(-(x - mean)**2 /
+                  (2 * sigma**2)) / (tf.sqrt(2.0 * np.pi) * sigma)
 
 
 def _make_pos_def(mat):
@@ -55,7 +61,7 @@ def _create_encoder(source, lengths, batch_size, n_enc_neurons, n_layers,
 
     # Now hookup the cells to the input
     # [batch_size, max_time, embed_size]
-    (outputs, final_state) = tf.nn.bidirectional_dynamic_rnn(
+    (outputs_fw, output_bw), (final_state_fw, final_state_bw) = tf.nn.bidirectional_dynamic_rnn(
         cell_fw=cell_fw,
         cell_bw=cell_bw,
         inputs=source,
@@ -63,7 +69,7 @@ def _create_encoder(source, lengths, batch_size, n_enc_neurons, n_layers,
         time_major=False,
         dtype=tf.float32)
 
-    return outputs, final_state
+    return outputs_fw, final_state_fw
 
 
 def _create_decoder(n_dec_neurons,
@@ -78,7 +84,7 @@ def _create_decoder(n_dec_neurons,
                     n_features,
                     scope,
                     max_sequence_size,
-                    use_attention=True):
+                    use_attention=False):
     from tensorflow.python.layers.core import Dense
     output_layer = Dense(n_features, name='output_projection')
 
@@ -87,7 +93,7 @@ def _create_decoder(n_dec_neurons,
 
     if use_attention:
         attn_mech = tf.contrib.seq2seq.LuongAttention(
-            cells.output_size, encoder_outputs, encoder_lengths, scale=True)
+            cells.output_size, encoder_outputs, encoder_lengths, scale=False)
         cells = tf.contrib.seq2seq.AttentionWrapper(
             cell=cells,
             attention_mechanism=attn_mech,
@@ -97,7 +103,7 @@ def _create_decoder(n_dec_neurons,
             dtype=tf.float32, batch_size=batch_size)
         initial_state = initial_state.clone(cell_state=encoder_state)
     else:
-        initial_state = None
+        initial_state = encoder_state
 
     helper = tf.contrib.seq2seq.TrainingHelper(
         inputs=decoding_inputs,
@@ -126,15 +132,19 @@ def create_model(batch_size=50,
                  n_neurons=512,
                  n_layers=2,
                  n_gaussians=5,
-                 use_attention=True):
+                 use_attention=False):
     # [batch_size, max_time, n_features]
     source = tf.placeholder(
         tf.float32,
         shape=(batch_size, sequence_length, n_features),
         name='source')
+    target = tf.placeholder(
+        tf.float32,
+        shape=(batch_size, sequence_length, n_features),
+        name='source')
     lengths = tf.multiply(
         tf.ones((batch_size,), tf.int32),
-        sequence_length,
+        sequence_length - 1,
         name='source_lengths')
 
     # Dropout
@@ -143,12 +153,10 @@ def create_model(batch_size=50,
     # Get the input to the decoder by removing last element
     # and adding a 'go' symbol as first element
     with tf.variable_scope('target/slicing'):
-        decoder_input = tf.slice(source, [0, 0, 0],
+        decoder_input = tf.slice(target, [0, 0, 0],
                                  [batch_size, sequence_length - 1, n_features])
-        decoder_output = tf.slice(source, [0, 1, 0],
+        decoder_output = tf.slice(target, [0, 1, 0],
                                   [batch_size, sequence_length - 1, n_features])
-        decoder_input = tf.concat(
-            [tf.fill([batch_size, 1, n_features], 0.0), decoder_input], 1)
 
     # Embed word ids to target embedding
     with tf.variable_scope('source/embedding'):
@@ -193,8 +201,8 @@ def create_model(batch_size=50,
             n_layers=n_layers,
             keep_prob=keep_prob,
             batch_size=batch_size,
-            encoder_outputs=encoder_outputs[0],
-            encoder_state=encoder_state[0],
+            encoder_outputs=encoder_outputs,
+            encoder_state=encoder_state,
             encoder_lengths=lengths,
             decoding_inputs=decoder_input,
             decoding_lengths=lengths,
@@ -219,7 +227,7 @@ def create_model(batch_size=50,
         weights = tf.reshape(
             tf.slice(
                 decoding[0],
-                [0, 0, n_gaussians + n_features * n_features * n_gaussians],
+                [0, 0, n_features * n_gaussians + n_features * n_features * n_gaussians],
                 [batch_size, sequence_length - 1, n_gaussians]),
             [batch_size, sequence_length - 1, n_gaussians])
         components = []
@@ -235,10 +243,12 @@ def create_model(batch_size=50,
 
     with tf.variable_scope('loss'):
         p = gauss.prob(decoder_output)
-        loss = -tf.log(tf.maximum(tf.reduce_sum(p), 1e-10))
+        negloglike = -tf.log(tf.maximum(p, 1e-10))
+        loss = tf.reduce_mean(tf.reduce_sum(negloglike, 1))
 
     return {
-        'data': source,
+        'source': source,
+        'target': target,
         'keep_prob': keep_prob,
         'encoding': encoder_state,
         'decoding': decoding,
