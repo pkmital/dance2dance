@@ -278,9 +278,6 @@ def _create_decoder(n_dec_neurons,
 def create_model(batch_size=50,
                  sequence_length=120,
                  n_features=72,
-                 input_embed_size=512,
-                 target_embed_size=512,
-                 share_input_and_target_embedding=True,
                  n_neurons=512,
                  n_layers=2,
                  n_gaussians=5,
@@ -297,29 +294,24 @@ def create_model(batch_size=50,
         name='target')
     lengths = tf.multiply(
         tf.ones((batch_size,), tf.int32),
-        sequence_length - 1,
+        sequence_length,
         name='source_lengths')
 
     # Dropout
     keep_prob = tf.placeholder(tf.float32, name='keep_prob')
 
-    # Get the input to the decoder by removing last element
-    # and adding a 'go' symbol as first element
     with tf.variable_scope('target/slicing'):
+        source_last = tf.slice(source, [0, sequence_length - 1, 0], [batch_size, 1, n_features])
         decoder_input = tf.slice(target, [0, 0, 0],
                                  [batch_size, sequence_length - 1, n_features])
-        decoder_output = tf.slice(target, [0, 1, 0],
-                                  [batch_size, sequence_length - 1, n_features])
-
-    # Embed word ids to target embedding
-    with tf.variable_scope('source/embedding'):
-        source_embed, source_embed_matrix = _create_embedding(
-            x=source, embed_size=input_embed_size)
+        decoder_input = tf.concat([source_last, decoder_input], axis=1)
+        decoder_output = tf.slice(target, [0, 0, 0],
+                                  [batch_size, sequence_length, n_features])
 
     # Build the encoder
     with tf.variable_scope('encoder'):
         encoder_outputs, encoder_state = _create_encoder(
-            source=source_embed,
+            source=source,
             lengths=lengths,
             batch_size=batch_size,
             n_enc_neurons=n_neurons,
@@ -342,12 +334,12 @@ def create_model(batch_size=50,
             decoding_lengths=lengths,
             n_features=n_features,
             scope=scope,
-            max_sequence_size=sequence_length - 1,
+            max_sequence_size=sequence_length,
             n_gaussians=n_gaussians,
             use_mdn=use_mdn)
 
     if use_mdn:
-        max_sequence_size = sequence_length - 1
+        max_sequence_size = sequence_length
         with tf.variable_scope('mdn'):
             means = tf.reshape(
                 tf.slice(

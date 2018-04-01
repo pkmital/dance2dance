@@ -53,7 +53,6 @@ def train(data, mean_data, std_data, n_epochs=1000, batch_size=100, sequence_len
                        tf.local_variables_initializer())
     sess.run(init_op)
     saver = tf.train.Saver()
-    saver.restore(sess, 'seq2seq.ckpt-55')
 
     current_learning_rate = 0.01
     for epoch_i in range(n_epochs):
@@ -83,7 +82,7 @@ def train(data, mean_data, std_data, n_epochs=1000, batch_size=100, sequence_len
         print('\n-- epoch {}: mdn: {}, mse: {}, total: {} --\n'.format(
             epoch_i, total_mdn / (it_i + 1), total_mse / (it_i + 1),
             total / (it_i + 1)))
-        saver.save(sess, './seq2seq.ckpt', global_step=epoch_i)
+        saver.save(sess, './seq2seq-mdn.ckpt', global_step=epoch_i)
 
     sess.close()
 
@@ -96,14 +95,11 @@ def euler():
     batch_size = 64
     sequence_length = 200
     n_features = data.shape[-1]
-    input_embed_size = 512
-    target_embed_size = 512
-    share_input_and_target_embedding = True
     n_neurons = 1024
-    n_layers = 2
+    n_layers = 3
     n_gaussians = 5
     use_attention = True
-    use_mdn = False
+    use_mdn = True
     return locals()
 
 
@@ -123,7 +119,7 @@ def infer(data, mean_data, std_data, batch_size, sequence_length, **kwargs):
                            tf.local_variables_initializer())
         sess.run(init_op)
         saver = tf.train.Saver()
-        saver.restore(sess, 'seq2seq.ckpt-15')
+        saver.restore(sess, tf.train.latest_checkpoint('.'))
         source, target = next(
             batch_generator(
                 data, sequence_length=sequence_length, batch_size=batch_size))
