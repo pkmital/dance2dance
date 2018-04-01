@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import tensorflow as tf
 import seq2seq
 
@@ -71,29 +72,46 @@ def train(data, n_epochs=1000, batch_size=100, sequence_length=240, **kwargs):
     sess.close()
 
 
-def quat():
-    data = np.load('quats.npy')
+def euler():
+    data = np.load('euler.npy')
     data = (data.reshape([data.shape[0], -1]) - np.mean(data)) / np.std(data)
-    batch_size = 32
-    sequence_length = 120
+    batch_size = 64
+    sequence_length = 640
     n_features = data.shape[-1]
     input_embed_size = 512
     target_embed_size = 512
     share_input_and_target_embedding = True
     n_neurons = 512
-    n_layers = 2
+    n_layers = 3
     n_gaussians = 10
     use_attention = True
     return locals()
 
 
+def plot(data):
+    framerate = 60
+    points = 2000
+    skip = int(len(data) / points)
+    duration = len(data) / float(framerate)
+    data_skipped = data.transpose(1, 0, 2)[:, ::skip, :]
+    plt.figure(figsize=(16, 10), facecolor='white')
+    for i, joint in enumerate(data_skipped):
+        plt.gca().set_prop_cycle(None)
+        plt.plot(np.linspace(0, duration, len(joint)), i + joint, lw=1)
+    plt.ylim([0, data_skipped.shape[0]])
+    plt.xlim([0, duration])
+    plt.ylabel('Joint')
+    plt.xlabel('Seconds')
+    plt.show()
+
+
 def run_inference():
-    data = np.load('quats.npy')
+    data = np.load('euler.npy')
     mean_data = np.mean(data)
     std_data = np.std(data)
     data = (data.reshape([data.shape[0], -1]) - mean_data) / std_data
-    batch_size = 32
-    sequence_length = 120
+    batch_size = 1
+    sequence_length = 640
     n_features = data.shape[-1]
     input_embed_size = 512
     target_embed_size = 512
@@ -120,10 +138,15 @@ def run_inference():
     sess.run(init_op)
     saver = tf.train.Saver()
     saver.restore(sess, 'seq2seq.ckpt-40')
-    source, target = next(batch_generator(data, sequence_length=sequence_length, batch_size=batch_size))
-    recon = sess.run(net['decoding'], feed_dict={
-        net['source']: source,
-        net['keep_prob']: 1.0})
+    source, target = next(
+        batch_generator(
+            data, sequence_length=sequence_length, batch_size=batch_size))
+    recon = sess.run(
+        net['decoding'],
+        feed_dict={
+            net['source']: source,
+            net['keep_prob']: 1.0
+        })
     res = (recon[0] * std_data) + mean_data
     tgt = (target[0] * std_data) + mean_data
     fig, axs = plt.subplots(1, 2)
@@ -132,5 +155,5 @@ def run_inference():
 
 
 if __name__ == '__main__':
-    params = quat()
+    params = euler()
     train(**params)
