@@ -379,7 +379,7 @@ def create_model(batch_size=50,
 
         with tf.variable_scope('loss'):
             # p = gauss.prob(decoder_output)
-            dist = -tf.reduce_mean(tf.square(
+            dist = -tf.reduce_sum(tf.square(
                 (tf.expand_dims(decoder_output, 3) - means) / sigmas) / 2.0, 2)
             p = tf.log(weights) + dist - 0.5 * tf.log(np.pi * 2 * tf.square(tf.reduce_mean(sigmas, 2)))
             negloglike = -tf.reduce_logsumexp(p, axis=2)

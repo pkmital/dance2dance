@@ -74,7 +74,7 @@ def train(data, mean_data, std_data, n_epochs=1000, batch_size=100, sequence_len
             total_mdn += mdn_loss
             total_mse += mse_loss
             print('{}: mdn: {}, mse: {}, total: {}'.format(
-                it_i, mdn_loss, mse_loss, mdn_loss + mse_loss, end='\r'))
+                it_i, mdn_loss, mse_loss, mdn_loss + mse_loss), end='\r')
         current_learning_rate = max(0.0001,
                                     current_learning_rate * 0.99)
         print('iteration: {}, learning rate: {}'.format(
@@ -92,52 +92,58 @@ def euler():
     mean_data = np.mean(data)
     std_data = np.std(data)
     data = (data.reshape([data.shape[0], -1]) - mean_data) / std_data
-    batch_size = 32
-    sequence_length = 240
+    batch_size = 64
+    sequence_length = 200
     n_features = data.shape[-1]
     input_embed_size = 512
     target_embed_size = 512
     share_input_and_target_embedding = True
-    n_neurons = 512
+    n_neurons = 1024
     n_layers = 2
-    n_gaussians = 10
-    use_attention = False
-    use_mdn = True
+    n_gaussians = 5
+    use_attention = True
+    use_mdn = False
     return locals()
 
 
 def infer(data, mean_data, std_data, batch_size, sequence_length, **kwargs):
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
-    sess = tf.Session(config=config)
+    with tf.Graph().as_default() as g, tf.Session(config=config) as sess:
+        net = seq2seq.create_model(
+            batch_size=batch_size,
+            sequence_length=sequence_length,
+            **kwargs)
 
-    net = seq2seq.create_model(
-        batch_size=batch_size,
-        sequence_length=sequence_length,
-        **kwargs)
-
-    learning_rate = tf.placeholder(tf.float32, name='learning_rate')
-    opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(
-        net['loss'])
-    init_op = tf.group(tf.global_variables_initializer(),
-                       tf.local_variables_initializer())
-    sess.run(init_op)
-    saver = tf.train.Saver()
-    saver.restore(sess, 'seq2seq.ckpt-40')
-    source, target = next(
-        batch_generator(
-            data, sequence_length=sequence_length, batch_size=batch_size))
-    recon = sess.run(
-        net['decoding'],
-        feed_dict={
-            net['source']: source,
-            net['keep_prob']: 1.0
-        })
-    res = (recon[0] * std_data) + mean_data
-    tgt = (target[0] * std_data) + mean_data
-    fig, axs = plt.subplots(1, 2)
-    axs[0].plot(tgt)
-    axs[1].plot(res[0])
+        learning_rate = tf.placeholder(tf.float32, name='learning_rate')
+        opt = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(
+            net['loss'])
+        init_op = tf.group(tf.global_variables_initializer(),
+                           tf.local_variables_initializer())
+        sess.run(init_op)
+        saver = tf.train.Saver()
+        saver.restore(sess, 'seq2seq.ckpt-70')
+        source, target = next(
+            batch_generator(
+                data, sequence_length=sequence_length, batch_size=batch_size))
+        recon = sess.run(
+            net['decoding'],
+            feed_dict={
+                net['source']: source,
+                net['keep_prob']: 1.0
+            })[0]
+        src = (source * std_data) + mean_data
+        tgt = (target * std_data) + mean_data
+        res = (recon * std_data) + mean_data
+        fig, axs = plt.subplots(2, 2)
+        axs[0][0].plot(src)
+        axs[0][0].set_title('Source')
+        axs[0][1].plot(tgt)
+        axs[0][1].set_title('Target (Original)')
+        axs[1][0].plot(src)
+        axs[1][0].set_title('Source')
+        axs[1][1].plot(res[0])
+        axs[1][1].set_title('Target (Synthesis)')
 
 
 if __name__ == '__main__':
