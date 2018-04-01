@@ -66,7 +66,7 @@ def train(data, mean_data, std_data, n_epochs=1000, batch_size=100, sequence_len
                 [net['mse_loss'], net['mdn_loss'], opt],
                 feed_dict={
                     learning_rate: current_learning_rate,
-                    net['keep_prob']: 0.9,
+                    net['keep_prob']: 0.8,
                     net['source']: source,
                     net['target']: target
                 })
@@ -92,8 +92,8 @@ def euler():
     mean_data = np.mean(data)
     std_data = np.std(data)
     data = (data.reshape([data.shape[0], -1]) - mean_data) / std_data
-    batch_size = 128
-    sequence_length = 512
+    batch_size = 32
+    sequence_length = 240
     n_features = data.shape[-1]
     input_embed_size = 512
     target_embed_size = 512
@@ -102,6 +102,7 @@ def euler():
     n_layers = 2
     n_gaussians = 10
     use_attention = False
+    use_mdn = True
     return locals()
 
 

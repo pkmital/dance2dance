@@ -52,8 +52,6 @@ class RegressionHelper(tf.contrib.seq2seq.Helper):
         return (finished, next_inputs, state)
 
 
-
-
 class MDNRegressionHelper(tf.contrib.seq2seq.Helper):
     """Helper interface.    Helper instances are used by SamplingDecoder."""
     def __init__(self, batch_size, max_sequence_size, n_features, n_gaussians):
@@ -75,7 +73,7 @@ class MDNRegressionHelper(tf.contrib.seq2seq.Helper):
 
     @property
     def sample_ids_shape(self):
-        return self._n_features * self._n_gaussians
+        return self._n_features
 
     def initialize(self, name=None):
         finished = tf.tile([False], [self._batch_size])
@@ -89,38 +87,39 @@ class MDNRegressionHelper(tf.contrib.seq2seq.Helper):
         with tf.variable_scope('mdn'):
             means = tf.reshape(
                 tf.slice(
-                    outputs, [0, 0, 0],
-                    [self.batch_size, self.max_sequence_size, self.n_features * self.n_gaussians]),
-                [self.batch_size, self.max_sequence_size, self.n_features, self.n_gaussians])
+                    outputs, [0, 0],
+                    [self._batch_size, self._n_features * self._n_gaussians]),
+                [self._batch_size, self._n_features, self._n_gaussians], name='means')
             sigmas = tf.nn.softplus(tf.reshape(
-                tf.slice(outputs, [0, 0, self.n_features * self.n_gaussians], [
-                    self.batch_size, self.max_sequence_size,
-                    self.n_features * self.n_gaussians
-                ]), [
-                    self.batch_size, self.max_sequence_size, self.n_features, self.n_gaussians
-                ]))
+                tf.slice(outputs, [0, self._n_features * self._n_gaussians], [
+                    self._batch_size,
+                    self._n_features * self._n_gaussians
+                ], name='sigmas_pre_norm'), [
+                    self._batch_size, self._n_features, self._n_gaussians
+                ]), name='sigmas')
             weights = tf.nn.softmax(tf.reshape(
                 tf.slice(
                     outputs,
-                    [0, 0, self.n_features * self.n_gaussians + self.n_features * self.n_gaussians],
-                    [self.batch_size, self.max_sequence_size, self.n_gaussians]),
-                [self.batch_size, self.max_sequence_size, self.n_gaussians]))
-            weighted_reconstruction = tf.reduce_mean(tf.expand_dims(weights, 2) * means, 3)
+                    [0, 2 * self._n_features * self._n_gaussians],
+                    [self._batch_size, self._n_gaussians], name='weights_pre_norm'),
+                [self._batch_size, self._n_gaussians]), name='weights')
+            weighted_reconstruction = tf.reduce_mean(tf.expand_dims(weights, 1) * means, 2)
         return weighted_reconstruction
 
     def next_inputs(self, time, outputs, state, sample_ids, name=None):
         """Returns `(finished, next_inputs, next_state)`."""
-        del sample_ids
         finished = tf.cond(
             tf.less(time, self._max_sequence_size),
             lambda: False, lambda: True)
         del time
+        del outputs
         all_finished = tf.reduce_all(finished)
         next_inputs = tf.cond(
             all_finished,
             # If we're finished, the next_inputs value doesn't matter
-            lambda: tf.zeros_like(outputs),
-            lambda: outputs)
+            lambda: tf.zeros_like(sample_ids),
+            lambda: sample_ids)
+        del sample_ids
         return (finished, next_inputs, state)
 
 
@@ -199,7 +198,11 @@ def _create_decoder(n_dec_neurons,
                     use_attention=False,
                     use_mdn=False):
     from tensorflow.python.layers.core import Dense
-    output_layer = Dense(n_features, name='output_projection')
+    if use_mdn:
+        n_outputs = n_features * n_gaussians + n_features * n_gaussians + n_gaussians
+    else:
+        n_outputs = n_features
+    output_layer = Dense(n_outputs, name='output_projection')
 
     with tf.variable_scope('forward'):
         cells = _create_rnn_cell(n_dec_neurons, n_layers, keep_prob)
@@ -314,10 +317,6 @@ def create_model(batch_size=50,
 
     # Build the decoder
     with tf.variable_scope('decoder') as scope:
-        if use_mdn:
-            n_outputs = n_features * n_gaussians + n_features * n_gaussians + n_gaussians
-        else:
-            n_outputs = n_features
         outputs, infer_outputs = _create_decoder(
             n_dec_neurons=n_neurons,
             n_layers=n_layers,
@@ -328,13 +327,14 @@ def create_model(batch_size=50,
             encoder_lengths=lengths,
             decoding_inputs=decoder_input,
             decoding_lengths=lengths,
-            n_features=n_outputs,
+            n_features=n_features,
             scope=scope,
             max_sequence_size=sequence_length - 1,
             n_gaussians=n_gaussians,
             use_mdn=use_mdn)
 
     if use_mdn:
+        max_sequence_size = sequence_length - 1
         with tf.variable_scope('mdn'):
             means = tf.reshape(
                 tf.slice(
