@@ -123,7 +123,7 @@ def infer(data, mean_data, std_data, batch_size, sequence_length, **kwargs):
                            tf.local_variables_initializer())
         sess.run(init_op)
         saver = tf.train.Saver()
-        saver.restore(sess, 'seq2seq.ckpt-15')
+        saver.restore(sess, tf.train.latest_checkpoint('.'))
         source, target = next(
             batch_generator(
                 data, sequence_length=sequence_length, batch_size=batch_size))
