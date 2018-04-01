@@ -122,7 +122,7 @@ def infer(data, mean_data, std_data, batch_size, sequence_length, **kwargs):
                            tf.local_variables_initializer())
         sess.run(init_op)
         saver = tf.train.Saver()
-        saver.restore(sess, 'seq2seq.ckpt-70')
+        saver.restore(sess, 'seq2seq.ckpt-20')
         source, target = next(
             batch_generator(
                 data, sequence_length=sequence_length, batch_size=batch_size))
@@ -136,13 +136,13 @@ def infer(data, mean_data, std_data, batch_size, sequence_length, **kwargs):
         tgt = (target * std_data) + mean_data
         res = (recon * std_data) + mean_data
         fig, axs = plt.subplots(2, 2)
-        axs[0][0].plot(src)
+        axs[0][0].plot(src.reshape([batch_size * sequence_length, -1]))
         axs[0][0].set_title('Source')
-        axs[0][1].plot(tgt)
+        axs[0][1].plot(tgt.reshape([batch_size * sequence_length, -1]))
         axs[0][1].set_title('Target (Original)')
-        axs[1][0].plot(src)
+        axs[1][0].plot(src.reshape([batch_size * sequence_length, -1]))
         axs[1][0].set_title('Source')
-        axs[1][1].plot(res[0])
+        axs[1][1].plot(res.reshape([batch_size * (sequence_length - 1), -1]))
         axs[1][1].set_title('Target (Synthesis)')
 
 
