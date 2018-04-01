@@ -52,6 +52,78 @@ class RegressionHelper(tf.contrib.seq2seq.Helper):
         return (finished, next_inputs, state)
 
 
+
+
+class MDNRegressionHelper(tf.contrib.seq2seq.Helper):
+    """Helper interface.    Helper instances are used by SamplingDecoder."""
+    def __init__(self, batch_size, max_sequence_size, n_features, n_gaussians):
+        self._batch_size = batch_size
+        self._max_sequence_size = max_sequence_size
+        self._n_features = n_features
+        self._n_gaussians = n_gaussians
+        self._batch_size_tensor = tf.convert_to_tensor(
+                batch_size, dtype=tf.int32, name="batch_size")
+
+    @property
+    def batch_size(self):
+        """Returns a scalar int32 tensor."""
+        return self._batch_size_tensor
+
+    @property
+    def sample_ids_dtype(self):
+        return tf.float32
+
+    @property
+    def sample_ids_shape(self):
+        return self._n_features * self._n_gaussians
+
+    def initialize(self, name=None):
+        finished = tf.tile([False], [self._batch_size])
+        start_inputs = tf.fill([self._batch_size, self._n_features], 0.0)
+        return (finished, start_inputs)
+
+    def sample(self, time, outputs, state, name=None):
+        """Returns `sample_ids`."""
+        del time, state
+        # return outputs
+        with tf.variable_scope('mdn'):
+            means = tf.reshape(
+                tf.slice(
+                    outputs, [0, 0, 0],
+                    [self.batch_size, self.max_sequence_size, self.n_features * self.n_gaussians]),
+                [self.batch_size, self.max_sequence_size, self.n_features, self.n_gaussians])
+            sigmas = tf.nn.softplus(tf.reshape(
+                tf.slice(outputs, [0, 0, self.n_features * self.n_gaussians], [
+                    self.batch_size, self.max_sequence_size,
+                    self.n_features * self.n_gaussians
+                ]), [
+                    self.batch_size, self.max_sequence_size, self.n_features, self.n_gaussians
+                ]))
+            weights = tf.nn.softmax(tf.reshape(
+                tf.slice(
+                    outputs,
+                    [0, 0, self.n_features * self.n_gaussians + self.n_features * self.n_gaussians],
+                    [self.batch_size, self.max_sequence_size, self.n_gaussians]),
+                [self.batch_size, self.max_sequence_size, self.n_gaussians]))
+            weighted_reconstruction = tf.reduce_mean(tf.expand_dims(weights, 2) * means, 3)
+        return weighted_reconstruction
+
+    def next_inputs(self, time, outputs, state, sample_ids, name=None):
+        """Returns `(finished, next_inputs, next_state)`."""
+        del sample_ids
+        finished = tf.cond(
+            tf.less(time, self._max_sequence_size),
+            lambda: False, lambda: True)
+        del time
+        all_finished = tf.reduce_all(finished)
+        next_inputs = tf.cond(
+            all_finished,
+            # If we're finished, the next_inputs value doesn't matter
+            lambda: tf.zeros_like(outputs),
+            lambda: outputs)
+        return (finished, next_inputs, state)
+
+
 def gausspdf(x, mean, sigma):
     return -(x - mean)**2 / (2 * sigma**2)
 
@@ -124,7 +196,8 @@ def _create_decoder(n_dec_neurons,
                     scope,
                     max_sequence_size,
                     n_gaussians,
-                    use_attention=False):
+                    use_attention=False,
+                    use_mdn=False):
     from tensorflow.python.layers.core import Dense
     output_layer = Dense(n_features, name='output_projection')
 
@@ -160,8 +233,17 @@ def _create_decoder(n_dec_neurons,
         impute_finished=True,
         maximum_iterations=max_sequence_size)
 
-    helper = RegressionHelper(
-        batch_size=batch_size, max_sequence_size=max_sequence_size, n_features=n_features)
+    if use_mdn:
+        helper = MDNRegressionHelper(
+            batch_size=batch_size,
+            max_sequence_size=max_sequence_size,
+            n_features=n_features,
+            n_gaussians=n_gaussians)
+    else:
+        helper = RegressionHelper(
+            batch_size=batch_size,
+            max_sequence_size=max_sequence_size,
+            n_features=n_features)
     scope.reuse_variables()
     infer_decoder = tf.contrib.seq2seq.BasicDecoder(
         cell=cells,
@@ -186,6 +268,7 @@ def create_model(batch_size=50,
                  n_neurons=512,
                  n_layers=2,
                  n_gaussians=5,
+                 use_mdn=False,
                  use_attention=False):
     # [batch_size, max_time, n_features]
     source = tf.placeholder(
@@ -231,6 +314,10 @@ def create_model(batch_size=50,
 
     # Build the decoder
     with tf.variable_scope('decoder') as scope:
+        if use_mdn:
+            n_outputs = n_features * n_gaussians + n_features * n_gaussians + n_gaussians
+        else:
+            n_outputs = n_features
         outputs, infer_outputs = _create_decoder(
             n_dec_neurons=n_neurons,
             n_layers=n_layers,
@@ -241,16 +328,57 @@ def create_model(batch_size=50,
             encoder_lengths=lengths,
             decoding_inputs=decoder_input,
             decoding_lengths=lengths,
-            n_features=n_features,
+            n_features=n_outputs,
             scope=scope,
             max_sequence_size=sequence_length - 1,
-            n_gaussians=n_gaussians)
+            n_gaussians=n_gaussians,
+            use_mdn=use_mdn)
 
-    with tf.variable_scope('loss'):
-        mdn_loss = tf.reduce_mean(tf.reduce_sum([[0.0]], 1))
-        mse_loss = tf.losses.mean_squared_error(
-            outputs[0], decoder_output)
-        loss = mdn_loss + mse_loss
+    if use_mdn:
+        with tf.variable_scope('mdn'):
+            means = tf.reshape(
+                tf.slice(
+                    outputs[0], [0, 0, 0],
+                    [batch_size, max_sequence_size, n_features * n_gaussians]),
+                [batch_size, max_sequence_size, n_features, n_gaussians])
+            sigmas = tf.nn.softplus(tf.reshape(
+                tf.slice(outputs[0], [0, 0, n_features * n_gaussians], [
+                    batch_size, max_sequence_size,
+                    n_features * n_gaussians
+                ]), [
+                    batch_size, max_sequence_size, n_features, n_gaussians
+                ]))
+            weights = tf.nn.softmax(tf.reshape(
+                tf.slice(
+                    outputs[0],
+                    [0, 0, n_features * n_gaussians + n_features * n_gaussians],
+                    [batch_size, max_sequence_size, n_gaussians]),
+                [batch_size, max_sequence_size, n_gaussians]))
+            components = []
+            for gauss_i in range(n_gaussians):
+                mean_i = means[:, :, :, gauss_i]
+                sigma_i = sigmas[:, :, :, gauss_i]
+                components.append(
+                    tfd.MultivariateNormalDiag(
+                        loc=mean_i, scale_diag=sigma_i))
+            gauss = tfd.Mixture(
+                cat=tfd.Categorical(probs=weights), components=components)
+
+        with tf.variable_scope('loss'):
+            p = gauss.prob(decoder_output)
+            negloglike = -tf.log(tf.maximum(p, 1e-10))
+            weighted_reconstruction = tf.reduce_mean(tf.expand_dims(weights, 2) * means, 3)
+            mdn_loss = tf.reduce_mean(tf.reduce_sum(negloglike, 1))
+            mse_loss = tf.losses.mean_squared_error(
+                weighted_reconstruction, decoder_output)
+            loss = mdn_loss + mse_loss
+    else:
+        with tf.variable_scope('loss'):
+            mdn_loss = tf.reduce_mean(tf.reduce_sum([[0.0]], 1))
+            mse_loss = tf.losses.mean_squared_error(
+                outputs[0], decoder_output)
+            loss = mdn_loss + mse_loss
+
 
     return {
         'source': source,
