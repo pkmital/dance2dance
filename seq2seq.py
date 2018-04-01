@@ -279,6 +279,8 @@ def create_model(batch_size=50,
                  sequence_length=120,
                  n_features=72,
                  n_neurons=512,
+                 input_embed_size=None,
+                 target_embed_size=None,
                  n_layers=2,
                  n_gaussians=5,
                  use_mdn=False,
@@ -308,10 +310,17 @@ def create_model(batch_size=50,
         decoder_output = tf.slice(target, [0, 0, 0],
                                   [batch_size, sequence_length, n_features])
 
+    if input_embed_size:
+        with tf.variable_scope('source/embedding'):
+            source_embed, source_embed_matrix = _create_embedding(
+                x=source, embed_size=input_embed_size)
+    else:
+        source_embed = source
+
     # Build the encoder
     with tf.variable_scope('encoder'):
         encoder_outputs, encoder_state = _create_encoder(
-            source=source,
+            source=source_embed,
             lengths=lengths,
             batch_size=batch_size,
             n_enc_neurons=n_neurons,
