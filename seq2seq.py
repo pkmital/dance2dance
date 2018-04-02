@@ -368,22 +368,19 @@ def create_model(batch_size=50,
                         n_features * n_gaussians + n_features * n_gaussians
                     ], [batch_size, max_sequence_size, n_gaussians]),
                     [batch_size, max_sequence_size, n_gaussians]))
-            # components = []
-            # for gauss_i in range(n_gaussians):
-            #     mean_i = means[:, :, :, gauss_i]
-            #     sigma_i = sigmas[:, :, :, gauss_i]
-            #     components.append(
-            #         tfd.MultivariateNormalDiag(
-            #             loc=mean_i, scale_diag=sigma_i))
-            # gauss = tfd.Mixture(
-            #     cat=tfd.Categorical(probs=weights), components=components)
+            components = []
+            for gauss_i in range(n_gaussians):
+                mean_i = means[:, :, :, gauss_i]
+                sigma_i = sigmas[:, :, :, gauss_i]
+                components.append(
+                    tfd.MultivariateNormalDiag(
+                        loc=mean_i, scale_diag=sigma_i))
+            gauss = tfd.Mixture(
+                cat=tfd.Categorical(probs=weights), components=components)
 
         with tf.variable_scope('loss'):
-            # p = gauss.prob(decoder_output)
-            dist = -tf.reduce_sum(tf.square(
-                (tf.expand_dims(decoder_output, 3) - means) / sigmas) / 2.0, 2)
-            p = tf.log(weights) + dist - 0.5 * tf.log(np.pi * 2 * tf.square(tf.reduce_mean(sigmas, 2)))
-            negloglike = -tf.reduce_logsumexp(p, axis=2)
+            p = gauss.log_prob(decoder_output)
+            negloglike = -tf.reduce_logsumexp(p, axis=1)
             weighted_reconstruction = tf.reduce_mean(
                 tf.expand_dims(weights, 2) * means, 3)
             mdn_loss = tf.reduce_mean(negloglike)

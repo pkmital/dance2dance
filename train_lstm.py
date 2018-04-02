@@ -118,7 +118,7 @@ def infer(source,
         }
 
 
-def test():
+def test_euler():
     data = np.load('euler.npy')
     data = data.reshape(data.shape[0], -1)
     data_mean = np.mean(data, axis=0)
@@ -132,7 +132,67 @@ def test():
     n_layers = 3
     n_gaussians = 10
     use_mdn = True
-    model_name = 'lstm_mdn-v1'
+    model_name = 'lstm_mdn-euler' # v1
+
+    res = train(
+        data=data,
+        data_mean=data_mean,
+        data_std=data_std,
+        batch_size=batch_size,
+        sequence_length=sequence_length,
+        n_features=n_features,
+        n_neurons=n_neurons,
+        n_layers=n_layers,
+        n_gaussians=n_gaussians,
+        use_mdn=use_mdn,
+        model_name=model_name)
+
+
+def test_quats():
+    data = np.load('quats.npy')
+    data = data.reshape(data.shape[0], -1)
+    data_mean = np.mean(data, axis=0)
+    data_std = np.std(data, axis=0)
+    idxs = np.where(data_std > 0)[0]
+    data = (data[:, idxs] - data_mean[idxs]) / data_std[idxs]
+    n_features = data.shape[-1]
+    batch_size = 20
+    sequence_length = 240
+    n_neurons = 1024
+    n_layers = 3
+    n_gaussians = 10
+    use_mdn = True
+    model_name = 'lstm_mdn-quats'
+
+    res = train(
+        data=data,
+        data_mean=data_mean,
+        data_std=data_std,
+        batch_size=batch_size,
+        sequence_length=sequence_length,
+        n_features=n_features,
+        n_neurons=n_neurons,
+        n_layers=n_layers,
+        n_gaussians=n_gaussians,
+        use_mdn=use_mdn,
+        model_name=model_name)
+
+
+def test_local_positions():
+    data = np.load('local_positions.npy')
+    data = data.reshape(data.shape[0], -1)
+    data_mean = np.mean(data, axis=0)
+    data_std = np.std(data, axis=0)
+    idxs = np.where(data_std > 0)[0]
+    data = (data[:, idxs] - data_mean[idxs]) / data_std[idxs]
+    n_features = data.shape[-1]
+    batch_size = 20
+    sequence_length = 240
+    n_neurons = 1024
+    n_layers = 3
+    n_gaussians = 10
+    use_mdn = True
+    model_name = 'lstm_mdn-local-positions'
 
     res = train(
         data=data,
