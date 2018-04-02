@@ -136,6 +136,16 @@ def create_model(batch_size=50,
     with tf.variable_scope('loss'):
         negloglike = -gauss.log_prob(source_output)
         mdn_loss = tf.reduce_mean(negloglike)
+        weighted_reconstruction = tf.reduce_mean(
+            tf.expand_dims(weights, 2) * means, 3)
+        if sequence_length > 1:
+            weighted_mse_loss = tf.losses.mean_squared_error(
+                weighted_reconstruction,
+                source_output)
+            mse = tf.losses.mean_squared_error(sample, source_output)
+        else:
+            weighted_mse_loss = tf.constant(0)
+            mse = tf.constant(0)
         loss = mdn_loss
 
     return {
@@ -145,5 +155,8 @@ def create_model(batch_size=50,
         'sample': sample,
         'loss': loss,
         'initial_state': initial_state,
-        'final_state': final_state
+        'final_state': final_state,
+        'mse': mse,
+        'weighted_mse': weighted_mse_loss,
+        'weighted_reconstruction': weighted_reconstruction
     }
