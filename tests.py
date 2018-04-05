@@ -143,6 +143,28 @@ def euler_v4():
         use_mdn=use_mdn,
         model_name=model_name)
 
+    restore_name = 'seq2seq-v4-149'
+
+    offset = 100
+    source = data[offset * sequence_length:sequence_length * (offset + 1), :].reshape(1, sequence_length, -1)
+    target = data[(offset + 1) * sequence_length:sequence_length * (offset + 2), :].reshape(1, sequence_length, -1)
+
+    train.infer(
+        source=source,
+        target=target,
+        data_mean=data_mean,
+        data_std=data_std,
+        batch_size=1,
+        sequence_length=sequence_length,
+        n_features=n_features,
+        input_embed_size=input_embed_size,
+        n_neurons=n_neurons,
+        n_layers=n_layers,
+        n_gaussians=n_gaussians,
+        use_attention=use_attention,
+        use_mdn=use_mdn,
+        model_name=restore_name)
+
 
 if __name__ == '__main__':
     euler_v4()

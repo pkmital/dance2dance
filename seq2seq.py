@@ -116,9 +116,17 @@ class MDNRegressionHelper(tf.contrib.seq2seq.Helper):
                         name='weights_pre_norm'),
                     [self._batch_size, self._n_gaussians]),
                 name='weights')
-            weighted_reconstruction = tf.reduce_mean(
-                tf.expand_dims(weights, 1) * means, 2)
-        return weighted_reconstruction
+            components = []
+            for gauss_i in range(self._n_gaussians):
+                mean_i = means[:, :, gauss_i]
+                sigma_i = sigmas[:, :, gauss_i]
+                components.append(
+                    tfd.MultivariateNormalDiag(
+                        loc=mean_i, scale_diag=sigma_i))
+            gauss = tfd.Mixture(
+                cat=tfd.Categorical(probs=weights), components=components)
+            sample = gauss.sample()
+        return sample
 
     def next_inputs(self, time, outputs, state, sample_ids, name=None):
         """Returns `(finished, next_inputs, next_state)`."""
@@ -134,10 +142,6 @@ class MDNRegressionHelper(tf.contrib.seq2seq.Helper):
             lambda: sample_ids)
         del sample_ids
         return (finished, next_inputs, state)
-
-
-def gausspdf(x, mean, sigma):
-    return -(x - mean)**2 / (2 * sigma**2)
 
 
 def _create_embedding(x, embed_size, embed_matrix=None):
@@ -377,6 +381,7 @@ def create_model(batch_size=50,
                         loc=mean_i, scale_diag=sigma_i))
             gauss = tfd.Mixture(
                 cat=tfd.Categorical(probs=weights), components=components)
+            sample = gauss.sample()
 
         with tf.variable_scope('loss'):
             negloglike = -gauss.log_prob(decoder_output)
@@ -398,6 +403,7 @@ def create_model(batch_size=50,
         'keep_prob': keep_prob,
         'encoding': encoder_state,
         'decoding': infer_outputs,
+        'sample': sample,
         'weighted': weighted_reconstruction,
         'loss': loss,
         'mdn_loss': mdn_loss,
