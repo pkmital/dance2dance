@@ -379,8 +379,7 @@ def create_model(batch_size=50,
                 cat=tfd.Categorical(probs=weights), components=components)
 
         with tf.variable_scope('loss'):
-            p = gauss.log_prob(decoder_output)
-            negloglike = -tf.reduce_logsumexp(p, axis=1)
+            negloglike = -gauss.log_prob(decoder_output)
             weighted_reconstruction = tf.reduce_mean(
                 tf.expand_dims(weights, 2) * means, 3)
             mdn_loss = tf.reduce_mean(negloglike)
@@ -399,6 +398,7 @@ def create_model(batch_size=50,
         'keep_prob': keep_prob,
         'encoding': encoder_state,
         'decoding': infer_outputs,
+        'weighted': weighted_reconstruction,
         'loss': loss,
         'mdn_loss': mdn_loss,
         'mse_loss': mse_loss

@@ -4,9 +4,9 @@ import train
 
 def euler():
     data = np.load('euler.npy')
-    mean_data = np.mean(data)
-    std_data = np.std(data)
-    data = (data.reshape([data.shape[0], -1]) - mean_data) / std_data
+    data_mean = np.mean(data)
+    data_std = np.std(data)
+    data = (data.reshape([data.shape[0], -1]) - data_mean) / data_std
     n_features = data.shape[-1]
     batch_size = 50
     sequence_length = 240
@@ -21,8 +21,8 @@ def euler():
 
     train.infer(
         data=data,
-        mean_data=mean_data,
-        std_data=std_data,
+        data_mean=data_mean,
+        data_std=data_std,
         batch_size=batch_size,
         sequence_length=sequence_length,
         n_features=n_features,
@@ -37,9 +37,9 @@ def euler():
 
 def euler_v2():
     data = np.load('euler.npy')
-    mean_data = np.mean(data)
-    std_data = np.std(data)
-    data = (data.reshape([data.shape[0], -1]) - mean_data) / std_data
+    data_mean = np.mean(data)
+    data_std = np.std(data)
+    data = (data.reshape([data.shape[0], -1]) - data_mean) / data_std
     n_features = data.shape[-1]
     batch_size = 50
     sequence_length = 240
@@ -53,8 +53,8 @@ def euler_v2():
 
     train.infer(
         data=data,
-        mean_data=mean_data,
-        std_data=std_data,
+        data_mean=data_mean,
+        data_std=data_std,
         batch_size=batch_size,
         sequence_length=sequence_length,
         n_features=n_features,
@@ -69,9 +69,9 @@ def euler_v2():
 
 def euler_v3():
     data = np.load('euler.npy')
-    mean_data = np.mean(data)
-    std_data = np.std(data)
-    data = (data.reshape([data.shape[0], -1]) - mean_data) / std_data
+    data_mean = np.mean(data)
+    data_std = np.std(data)
+    data = (data.reshape([data.shape[0], -1]) - data_mean) / data_std
     n_features = data.shape[-1]
     sequence_length = 120
     input_embed_size = None
@@ -94,8 +94,8 @@ def euler_v3():
     res = train.infer(
         source=source,
         target=target,
-        mean_data=mean_data,
-        std_data=std_data,
+        data_mean=data_mean,
+        data_std=data_std,
         batch_size=batch_size,
         sequence_length=sequence_length,
         n_features=n_features,
@@ -111,12 +111,15 @@ def euler_v3():
 def euler_v4():
     data = np.load('euler.npy')
     data = data.reshape(data.shape[0], -1)
-    mean_data = np.mean(data, axis=0)
-    std_data = np.std(data, axis=0)
-    data = (data - mean_data) / std_data
+    data_mean = np.mean(data, axis=0)
+    data_std = np.std(data, axis=0)
+    idxs = np.where(data_std > 0)[0]
+    data_mean = data_mean[idxs]
+    data_std = data_std[idxs]
+    data = (data[:, idxs] - data_mean) / data_std
     n_features = data.shape[-1]
-    batch_size = 20
-    sequence_length = 500
+    batch_size = 64
+    sequence_length = 120
     input_embed_size = None
     n_neurons = 512
     n_layers = 3
@@ -127,8 +130,8 @@ def euler_v4():
 
     res = train.train(
         data=data,
-        mean_data=mean_data,
-        std_data=std_data,
+        data_mean=data_mean,
+        data_std=data_std,
         batch_size=batch_size,
         sequence_length=sequence_length,
         n_features=n_features,

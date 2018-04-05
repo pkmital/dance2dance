@@ -53,8 +53,8 @@ def batch_generator(data, sequence_length, batch_size=50):
 
 
 def train(data,
-          mean_data,
-          std_data,
+          data_mean,
+          data_std,
           n_epochs=1000,
           batch_size=100,
           sequence_length=240,
@@ -116,8 +116,8 @@ def train(data,
 
 def infer(source,
           target,
-          mean_data,
-          std_data,
+          data_mean,
+          data_std,
           batch_size,
           sequence_length,
           ckpt_path='./',
@@ -134,24 +134,25 @@ def infer(source,
         sess.run(init_op)
         saver = tf.train.Saver()
         saver.restore(sess, os.path.join(ckpt_path, model_name))
-        recon, enc = sess.run(
-            [net['decoding'], net['encoding']],
+        weighted, recon, enc = sess.run(
+            [net['weighted'], net['decoding'], net['encoding']],
             feed_dict={
                 net['source']: source,
                 net['keep_prob']: 1.0
             })
-        src = (source * std_data) + mean_data
-        tgt = (target * std_data) + mean_data
-        res = (recon[0] * std_data) + mean_data
+        src = (source * data_std) + data_mean
+        tgt = (target * data_std) + data_mean
+        res = (recon[0] * data_std) + data_mean
+        wgt = (weighted[0] * data_std) + data_mean
         fig, axs = plt.subplots(2, 2)
         axs[0][0].plot(src.reshape(-1, src.shape[-1]))
         axs[0][0].set_title('Source')
         axs[0][1].plot(tgt.reshape(-1, tgt.shape[-1]))
         axs[0][1].set_title('Target (Original)')
-        axs[1][0].plot(src.reshape(-1, src.shape[-1]))
-        axs[1][0].set_title('Source')
+        axs[1][0].plot(wgt.reshape(-1, src.shape[-1]))
+        axs[1][0].set_title('Target (Synthesis Weighted)')
         axs[1][1].plot(res.reshape(-1, res.shape[-1]))
-        axs[1][1].set_title('Target (Synthesis)')
+        axs[1][1].set_title('Target (Synthesis Sampling)')
         np.save('source.npy', src)
         np.save('target.npy', tgt)
         np.save('encoding.npy', enc)

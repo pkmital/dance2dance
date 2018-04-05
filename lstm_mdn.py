@@ -144,9 +144,9 @@ def create_model(batch_size=50,
                 source_output)
             mse = tf.losses.mean_squared_error(sample, source_output)
         else:
-            weighted_mse_loss = tf.constant(0)
-            mse = tf.constant(0)
-        loss = mdn_loss
+            weighted_mse_loss = tf.constant(0.0)
+            mse = tf.constant(0.0)
+        loss = mdn_loss + weighted_mse_loss
 
     return {
         'source': source,

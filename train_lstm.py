@@ -80,7 +80,7 @@ def train(data,
                         '{}: total_loss: {} total_weighted_mse: {}'.
                         format(it_i, loss, weighted_mse),
                         end='\r')
-            current_learning_rate = max(0.0001, current_learning_rate * 0.99)
+            current_learning_rate = max(0.0001, current_learning_rate * 0.995)
             print('iteration: {}, learning rate: {}'.format(
                 it_i, current_learning_rate))
             print(
@@ -198,7 +198,7 @@ def test_euler():
     n_gaussians = 10
     use_mdn = True
     model_name = 'lstm_mdn-euler'
-    restore_name = None
+    restore_name = 'lstm_mdn-euler-365'
     overfit = False
 
     if overfit:
