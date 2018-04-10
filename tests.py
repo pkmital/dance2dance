@@ -2,113 +2,7 @@ import numpy as np
 import train
 
 
-def euler():
-    data = np.load('euler.npy')
-    data_mean = np.mean(data)
-    data_std = np.std(data)
-    data = (data.reshape([data.shape[0], -1]) - data_mean) / data_std
-    n_features = data.shape[-1]
-    batch_size = 50
-    sequence_length = 240
-    input_embed_size = 512
-    n_neurons = 1024
-    n_layers = 2
-    n_gaussians = 5
-    use_attention = True
-    use_mdn = False
-    # model_name = 'seq2seq.ckpt'
-    restore_name = 'seq2seq.ckpt-508'
-
-    train.infer(
-        data=data,
-        data_mean=data_mean,
-        data_std=data_std,
-        batch_size=batch_size,
-        sequence_length=sequence_length,
-        n_features=n_features,
-        input_embed_size=input_embed_size,
-        n_neurons=n_neurons,
-        n_layers=n_layers,
-        n_gaussians=n_gaussians,
-        use_attention=use_attention,
-        use_mdn=use_mdn,
-        model_name=restore_name)
-
-
-def euler_v2():
-    data = np.load('euler.npy')
-    data_mean = np.mean(data)
-    data_std = np.std(data)
-    data = (data.reshape([data.shape[0], -1]) - data_mean) / data_std
-    n_features = data.shape[-1]
-    batch_size = 50
-    sequence_length = 240
-    input_embed_size = None
-    n_neurons = 512
-    n_layers = 2
-    n_gaussians = 10
-    use_attention = True
-    use_mdn = False
-    model_name = 'seq2seq-v2.ckpt-279'
-
-    train.infer(
-        data=data,
-        data_mean=data_mean,
-        data_std=data_std,
-        batch_size=batch_size,
-        sequence_length=sequence_length,
-        n_features=n_features,
-        input_embed_size=input_embed_size,
-        n_neurons=n_neurons,
-        n_layers=n_layers,
-        n_gaussians=n_gaussians,
-        use_attention=use_attention,
-        use_mdn=use_mdn,
-        model_name=model_name)
-
-
-def euler_v3():
-    data = np.load('euler.npy')
-    data_mean = np.mean(data)
-    data_std = np.std(data)
-    data = (data.reshape([data.shape[0], -1]) - data_mean) / data_std
-    n_features = data.shape[-1]
-    sequence_length = 120
-    input_embed_size = None
-    n_neurons = 512
-    n_layers = 3
-    n_gaussians = 10
-    use_attention = False
-    use_mdn = False
-    model_name = 'seq2seq-v3.ckpt-429'
-
-    hop_length = 60
-    idxs = np.arange(0, len(data) - sequence_length * 2, hop_length)
-    source = np.array([data[i:i + sequence_length, :] for i in idxs])
-    target = np.array([
-        data[i + sequence_length:i + sequence_length * 2, :]
-        for i in idxs
-    ])
-    batch_size = len(idxs)
-
-    res = train.infer(
-        source=source,
-        target=target,
-        data_mean=data_mean,
-        data_std=data_std,
-        batch_size=batch_size,
-        sequence_length=sequence_length,
-        n_features=n_features,
-        input_embed_size=input_embed_size,
-        n_neurons=n_neurons,
-        n_layers=n_layers,
-        n_gaussians=n_gaussians,
-        use_attention=use_attention,
-        use_mdn=use_mdn,
-        model_name=model_name)
-
-
-def euler_v4():
+def test_euler():
     data = np.load('euler.npy')
     data = data.reshape(data.shape[0], -1)
     data_mean = np.mean(data, axis=0)
@@ -118,15 +12,17 @@ def euler_v4():
     data_std = data_std[idxs]
     data = (data[:, idxs] - data_mean) / data_std
     n_features = data.shape[-1]
-    batch_size = 64
+    batch_size = 100
     sequence_length = 120
     input_embed_size = None
-    n_neurons = 512
+    n_neurons = 1024
     n_layers = 3
-    n_gaussians = 10
-    use_attention = False
+    n_gaussians = 24
+    use_attention = True
     use_mdn = True
-    model_name = 'seq2seq-v4'
+    n_epochs = 5000
+    model_name = 'seq2seq-24-gaussians-3x1024'
+    restore_name = None
 
     res = train.train(
         data=data,
@@ -141,20 +37,24 @@ def euler_v4():
         n_gaussians=n_gaussians,
         use_attention=use_attention,
         use_mdn=use_mdn,
-        model_name=model_name)
+        n_epochs=n_epochs,
+        model_name=model_name,
+        restore_name=restore_name)
 
-    restore_name = 'seq2seq-v4-149'
-
-    offset = 100
-    source = data[offset * sequence_length:sequence_length * (offset + 1), :].reshape(1, sequence_length, -1)
-    target = data[(offset + 1) * sequence_length:sequence_length * (offset + 2), :].reshape(1, sequence_length, -1)
+    batch_size = 1
+    offset = 0
+    source = data[offset:offset + sequence_length * batch_size, :].reshape(
+        batch_size, sequence_length, -1)
+    target = data[offset + sequence_length * batch_size:offset + sequence_length * batch_size * 2, :].reshape(
+        batch_size, sequence_length, -1)
+    restore_name = 'seq2seq-20-gaussians-3x1024-571'
 
     train.infer(
         source=source,
         target=target,
         data_mean=data_mean,
         data_std=data_std,
-        batch_size=1,
+        batch_size=batch_size,
         sequence_length=sequence_length,
         n_features=n_features,
         input_embed_size=input_embed_size,
@@ -167,4 +67,4 @@ def euler_v4():
 
 
 if __name__ == '__main__':
-    euler_v4()
+    test_euler()

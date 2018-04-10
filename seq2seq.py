@@ -1,3 +1,9 @@
+"""
+Scheduled Sampling
+Anneal input of decoder
+variational latent embedding
+conv embed
+"""
 import numpy as np
 from functools import partial
 import tensorflow as tf
@@ -390,12 +396,12 @@ def create_model(batch_size=50,
             mdn_loss = tf.reduce_mean(negloglike)
             mse_loss = tf.losses.mean_squared_error(weighted_reconstruction,
                                                     decoder_output)
-            loss = mdn_loss + mse_loss
+            loss = mdn_loss
     else:
         with tf.variable_scope('loss'):
             mdn_loss = tf.reduce_mean(tf.reduce_sum([[0.0]], 1))
             mse_loss = tf.losses.mean_squared_error(outputs[0], decoder_output)
-            loss = mdn_loss + mse_loss
+            loss = mse_loss
 
     return {
         'source': source,
