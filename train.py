@@ -150,10 +150,6 @@ def infer(source,
         axs[1].set_title('Target (Original)')
         axs[2].plot(res.reshape(-1, res.shape[-1]))
         axs[2].set_title('Target (Synthesis Sampling)')
-        np.save('source.npy', src)
-        np.save('target.npy', tgt)
-        np.save('encoding.npy', enc)
-        np.save('prediction.npy', res)
         return {
             'source': src,
             'target': tgt,
@@ -162,49 +158,49 @@ def infer(source,
         }
 
 
-def feedback(source,
-             target,
-             data_mean,
-             data_std,
-             batch_size,
-             sequence_length,
-             ckpt_path='./',
-             model_name='seq2seq.ckpt',
-             **kwargs):
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-    with tf.Graph().as_default() as g, tf.Session(config=config) as sess:
-        net = seq2seq.create_model(
-            batch_size=batch_size, sequence_length=sequence_length, **kwargs)
-
-        init_op = tf.group(tf.global_variables_initializer(),
-                           tf.local_variables_initializer())
-        sess.run(init_op)
-        saver = tf.train.Saver()
-        saver.restore(sess, os.path.join(ckpt_path, model_name))
-        recon, enc = sess.run(
-            [net['decoding'], net['encoding']],
-            feed_dict={
-                net['source']: source,
-                net['keep_prob']: 1.0
-            })
-        src = (source * data_std) + data_mean
-        tgt = (target * data_std) + data_mean
-        res = np.minimum(1.0, np.maximum(0.0, (recon[1] * data_std) + data_mean))
-        fig, axs = plt.subplots(1, 3, sharey=True)
-        axs[0].plot(src.reshape(-1, src.shape[-1]))
-        axs[0].set_title('Source')
-        axs[1].plot(tgt.reshape(-1, tgt.shape[-1]))
-        axs[1].set_title('Target (Original)')
-        axs[2].plot(res.reshape(-1, res.shape[-1]))
-        axs[2].set_title('Target (Synthesis Sampling)')
-        np.save('source.npy', src)
-        np.save('target.npy', tgt)
-        np.save('encoding.npy', enc)
-        np.save('prediction.npy', res)
-        return {
-            'source': src,
-            'target': tgt,
-            'encoding': enc,
-            'prediction': res
-        }
+# def feedback(source,
+#              target,
+#              data_mean,
+#              data_std,
+#              batch_size,
+#              sequence_length,
+#              ckpt_path='./',
+#              model_name='seq2seq.ckpt',
+#              **kwargs):
+#     config = tf.ConfigProto()
+#     config.gpu_options.allow_growth = True
+#     with tf.Graph().as_default() as g, tf.Session(config=config) as sess:
+#         net = seq2seq.create_model(
+#             batch_size=batch_size, sequence_length=sequence_length, **kwargs)
+# 
+#         init_op = tf.group(tf.global_variables_initializer(),
+#                            tf.local_variables_initializer())
+#         sess.run(init_op)
+#         saver = tf.train.Saver()
+#         saver.restore(sess, os.path.join(ckpt_path, model_name))
+#         recon, enc = sess.run(
+#             [net['decoding'], net['encoding']],
+#             feed_dict={
+#                 net['source']: source,
+#                 net['keep_prob']: 1.0
+#             })
+#         src = (source * data_std) + data_mean
+#         tgt = (target * data_std) + data_mean
+#         res = np.minimum(1.0, np.maximum(0.0, (recon[1] * data_std) + data_mean))
+#         fig, axs = plt.subplots(1, 3, sharey=True)
+#         axs[0].plot(src.reshape(-1, src.shape[-1]))
+#         axs[0].set_title('Source')
+#         axs[1].plot(tgt.reshape(-1, tgt.shape[-1]))
+#         axs[1].set_title('Target (Original)')
+#         axs[2].plot(res.reshape(-1, res.shape[-1]))
+#         axs[2].set_title('Target (Synthesis Sampling)')
+#         np.save('source.npy', src)
+#         np.save('target.npy', tgt)
+#         np.save('encoding.npy', enc)
+#         np.save('prediction.npy', res)
+#         return {
+#             'source': src,
+#             'target': tgt,
+#             'encoding': enc,
+#             'prediction': res
+#         }
